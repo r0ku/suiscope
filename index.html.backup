@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuiScope - Sui Network Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="brand">
+                    <div class="logo">
+                        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span class="logo-text">SuiScope</span>
+                    </div>
+                    <span class="tagline">Explore the Sui Network</span>
+                </div>
+                
+                <nav class="nav">
+                    <button class="nav-item active" data-tab="search">
+                        <span class="nav-icon">🔍</span>
+                        Search
+                    </button>
+                    <button class="nav-item" data-tab="analytics">
+                        <span class="nav-icon">📊</span>
+                        Analytics
+                    </button>
+                    <button class="nav-item" data-tab="explorer">
+                        <span class="nav-icon">🗺️</span>
+                        Explorer
+                    </button>
+                </nav>
+                
+                <div class="theme-toggle">
+                    <button id="themeToggle" class="theme-btn" aria-label="Toggle theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="container">
+                <!-- Search Section -->
+                <section class="search-section">
+                    <div class="search-hero">
+                        <h1 class="search-title">
+                            Search the <span class="gradient-text">Sui Network</span>
+                        </h1>
+                        <p class="search-description">
+                            Instantly search across transactions, addresses, objects, and packages on the Sui blockchain
+                        </p>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <div class="search-input-group">
+                                <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/>
+                                </svg>
+                                <input 
+                                    type="text" 
+                                    id="searchInput" 
+                                    class="search-input" 
+                                    placeholder="Search by address, transaction hash, object ID, or package name..."
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+                                <button class="search-clear" id="clearSearch" aria-label="Clear search">
+                                    <svg viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+                                    </svg>
+                                </button>
+                                <button class="search-submit" id="searchSubmit">
+                                    <span class="search-submit-text">Search</span>
+                                    <svg class="search-submit-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Search Suggestions -->
+                            <div class="search-suggestions" id="searchSuggestions">
+                                <div class="suggestions-header">
+                                    <span>Quick searches</span>
+                                </div>
+                                <div class="suggestion-item" data-type="address">
+                                    <div class="suggestion-icon">👤</div>
+                                    <div class="suggestion-content">
+                                        <span class="suggestion-title">Sample Address</span>
+                                        <span class="suggestion-subtitle">0x123...789</span>
+                                    </div>
+                                </div>
+                                <div class="suggestion-item" data-type="transaction">
+                                    <div class="suggestion-icon">📝</div>
+                                    <div class="suggestion-content">
+                                        <span class="suggestion-title">Recent Transaction</span>
+                                        <span class="suggestion-subtitle">0xabc...def</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Network Selector -->
+                        <div class="network-selector">
+                            <label class="network-label">Network</label>
+                            <div class="network-tabs">
+                                <button class="network-tab active" data-network="mainnet">
+                                    <span class="network-indicator"></span>
+                                    Mainnet
+                                </button>
+                                <button class="network-tab" data-network="testnet">
+                                    <span class="network-indicator"></span>
+                                    Testnet
+                                </button>
+                                <button class="network-tab" data-network="devnet">
+                                    <span class="network-indicator"></span>
+                                    Devnet
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">🌐</div>
+                            <div class="stat-content">
+                                <span class="stat-value">1,234,567</span>
+                                <span class="stat-label">Total Transactions</span>
+                            </div>
+                            <div class="stat-trend positive">+12.5%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-content">
+                                <span class="stat-value">89,432</span>
+                                <span class="stat-label">Active Addresses</span>
+                            </div>
+                            <div class="stat-trend positive">+8.3%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-content">
+                                <span class="stat-value">5,678</span>
+                                <span class="stat-label">Objects Created</span>
+                            </div>
+                            <div class="stat-trend neutral">+2.1%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">⚡</div>
+                            <div class="stat-content">
+                                <span class="stat-value">2.3s</span>
+                                <span class="stat-label">Avg Block Time</span>
+                            </div>
+                            <div class="stat-trend positive">-0.2s</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Loading State -->
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="loading-content">
+                        <div class="loading-spinner">
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                        </div>
+                        <div class="loading-text">Searching the Sui Network...</div>
+                        <div class="loading-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <section class="results-section" id="resultsSection">
+                    <div class="results-header">
+                        <h2 class="results-title">Search Results</h2>
+                        <div class="results-meta">
+                            <span class="results-count">42 results found</span>
+                            <span class="results-time">in 0.234s</span>
+                        </div>
+                    </div>
+
+                    <!-- Result Filters -->
+                    <div class="result-filters">
+                        <button class="filter-btn active" data-filter="all">All Results</button>
+                        <button class="filter-btn" data-filter="transactions">
+                            <span class="filter-icon">📝</span>
+                            Transactions
+                            <span class="filter-count">15</span>
+                        </button>
+                        <button class="filter-btn" data-filter="addresses">
+                            <span class="filter-icon">👤</span>
+                            Addresses
+                            <span class="filter-count">8</span>
+                        </button>
+                        <button class="filter-btn" data-filter="objects">
+                            <span class="filter-icon">📦</span>
+                            Objects
+                            <span class="filter-count">12</span>
+                        </button>
+                        <button class="filter-btn" data-filter="packages">
+                            <span class="filter-icon">📚</span>
+                            Packages
+                            <span class="filter-count">7</span>
+                        </button>
+                    </div>
+
+                    <!-- Results List -->
+                    <div class="results-list">
+                        <!-- Transaction Result -->
+                        <div class="result-item" data-type="transaction">
+                            <div class="result-header">
+                                <div class="result-type-badge transaction">
+                                    <span class="badge-icon">📝</span>
+                                    Transaction
+                                </div>
+                                <div class="result-network">
+                                    <span class="network-badge mainnet">Mainnet</span>
+                                </div>
+                                <div class="result-timestamp">2 minutes ago</div>
+                            </div>
+                            <div class="result-content">
+                                <div class="result-title">
+                                    <a href="#" class="result-link">0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef</a>
+                                    <button class="copy-btn" data-value="0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef">
+                                        <svg viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M8 3.5a2.5 2.5 0 00-2.5 2.5v9a2.5 2.5 0 002.5 2.5h6a2.5 2.5 0 002.5-2.5V6.5a1.5 1.5 0 00-1.5-1.5H14a1.5 1.5 0 01-1.5-1.5V2a1.5 1.5 0 00-1.5-1.5H8z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="result-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">From:</span>
+                                        <span class="detail-value">0xabcd...1234</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">To:</span>
+                                        <span class="detail-value">0x5678...9abc</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Gas:</span>
+                                        <span class="detail-value">1,234,567 MIST</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Status:</span>
+                                        <span class="status-badge success">Success</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Address Result -->
+                        <div class="result-item" data-type="address">
+                            <div class="result-header">
+                                <div class="result-type-badge address">
+                                    <span class="badge-icon">👤</span>
+                                    Address
+                                </div>
+                                <div class="result-network">
+                                    <span class="network-badge mainnet">Mainnet</span>
+                                </div>
+                                <div class="result-timestamp">Active</div>
+                            </div>
+                            <div class="result-content">
+                                <div class="result-title">
+                                    <a href="#" class="result-link">0x2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef123</a>
+                                    <button class="copy-btn" data-value="0x2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef123">
+                                        <svg viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M8 3.5a2.5 2.5 0 00-2.5 2.5v9a2.5 2.5 0 002.5 2.5h6a2.5 2.5 0 002.5-2.5V6.5a1.5 1.5 0 00-1.5-1.5H14a1.5 1.5 0 01-1.5-1.5V2a1.5 1.5 0 00-1.5-1.5H8z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="result-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Balance:</span>
+                                        <span class="detail-value">1,234.56 SUI</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Objects:</span>
+                                        <span class="detail-value">42 objects</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Transactions:</span>
+                                        <span class="detail-value">189 txns</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Type:</span>
+                                        <span class="status-badge info">EOA</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Object Result -->
+                        <div class="result-item" data-type="object">
+                            <div class="result-header">
+                                <div class="result-type-badge object">
+                                    <span class="badge-icon">📦</span>
+                                    Object
+                                </div>
+                                <div class="result-network">
+                                    <span class="network-badge mainnet">Mainnet</span>
+                                </div>
+                                <div class="result-timestamp">1 hour ago</div>
+                            </div>
+                            <div class="result-content">
+                                <div class="result-title">
+                                    <a href="#" class="result-link">0x3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345</a>
+                                    <button class="copy-btn" data-value="0x3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345">
+                                        <svg viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M8 3.5a2.5 2.5 0 00-2.5 2.5v9a2.5 2.5 0 002.5 2.5h6a2.5 2.5 0 002.5-2.5V6.5a1.5 1.5 0 00-1.5-1.5H14a1.5 1.5 0 01-1.5-1.5V2a1.5 1.5 0 00-1.5-1.5H8z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="result-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Type:</span>
+                                        <span class="detail-value">0x2::coin::Coin&lt;0x2::sui::SUI&gt;</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Owner:</span>
+                                        <span class="detail-value">0xabcd...5678</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Version:</span>
+                                        <span class="detail-value">42</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Status:</span>
+                                        <span class="status-badge success">Exists</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Load More -->
+                    <div class="load-more-container">
+                        <button class="load-more-btn">
+                            <span class="load-more-text">Load More Results</span>
+                            <svg class="load-more-icon" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.04-1.08l4.158 3.96V3.75A.75.75 0 0110 3z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <div class="footer-content">
+                    <div class="footer-brand">
+                        <div class="logo">
+                            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="logo-text">SuiScope</span>
+                        </div>
+                        <p class="footer-description">Professional blockchain search and analytics for the Sui Network</p>
+                    </div>
+                    
+                    <div class="footer-links">
+                        <div class="link-group">
+                            <h4 class="link-title">Product</h4>
+                            <a href="#" class="footer-link">Search</a>
+                            <a href="#" class="footer-link">Analytics</a>
+                            <a href="#" class="footer-link">API</a>
+                            <a href="#" class="footer-link">Docs</a>
+                        </div>
+                        <div class="link-group">
+                            <h4 class="link-title">Community</h4>
+                            <a href="#" class="footer-link">Discord</a>
+                            <a href="#" class="footer-link">Twitter</a>
+                            <a href="#" class="footer-link">GitHub</a>
+                            <a href="#" class="footer-link">Blog</a>
+                        </div>
+                        <div class="link-group">
+                            <h4 class="link-title">Support</h4>
+                            <a href="#" class="footer-link">Help Center</a>
+                            <a href="#" class="footer-link">Contact</a>
+                            <a href="#" class="footer-link">Status</a>
+                            <a href="#" class="footer-link">Feedback</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="footer-bottom">
+                    <div class="footer-copyright">
+                        © 2024 SuiScope. Built with ❤️ for the Sui community.
+                    </div>
+                    <div class="footer-network-status">
+                        <span class="network-status-item">
+                            <span class="network-dot online"></span>
+                            Mainnet: Online
+                        </span>
+                        <span class="network-status-item">
+                            <span class="network-dot online"></span>
+                            Testnet: Online
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

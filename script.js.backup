@@ -1,0 +1,937 @@
+// ===== Theme Management =====
+class ThemeManager {
+    constructor() {
+        this.theme = localStorage.getItem('suiscope-theme') || 'auto';
+        this.themeToggle = document.getElementById('themeToggle');
+        this.init();
+    }
+
+    init() {
+        this.applyTheme();
+        this.themeToggle?.addEventListener('click', () => this.toggleTheme());
+        
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (this.theme === 'auto') {
+                this.applyTheme();
+            }
+        });
+    }
+
+    toggleTheme() {
+        const themes = ['light', 'dark', 'auto'];
+        const currentIndex = themes.indexOf(this.theme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        this.theme = themes[nextIndex];
+        this.saveTheme();
+        this.applyTheme();
+        this.updateThemeIcon();
+    }
+
+    applyTheme() {
+        const root = document.documentElement;
+        
+        if (this.theme === 'auto') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            root.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        } else {
+            root.setAttribute('data-theme', this.theme);
+        }
+        
+        this.updateThemeIcon();
+    }
+
+    updateThemeIcon() {
+        const iconMap = {
+            'light': '🌙',
+            'dark': '☀️',
+            'auto': '🌓'
+        };
+        
+        const icon = this.themeToggle?.querySelector('.theme-icon');
+        if (icon) {
+            icon.textContent = iconMap[this.theme];
+        }
+    }
+
+    saveTheme() {
+        localStorage.setItem('suiscope-theme', this.theme);
+    }
+}
+
+// ===== Toast Notifications =====
+class ToastManager {
+    constructor() {
+        this.container = document.getElementById('toastContainer');
+        this.toasts = new Set();
+    }
+
+    show(message, type = 'info', duration = 5000) {
+        const toast = this.createToast(message, type);
+        this.container.appendChild(toast);
+        this.toasts.add(toast);
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toast.style.transform = 'translateX(0)';
+        });
+
+        // Auto remove
+        setTimeout(() => {
+            this.remove(toast);
+        }, duration);
+
+        return toast;
+    }
+
+    createToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+
+        toast.innerHTML = `
+            <div class="toast-icon">${icons[type] || icons.info}</div>
+            <div class="toast-content">
+                <div class="toast-message">${message}</div>
+            </div>
+        `;
+
+        // Click to dismiss
+        toast.addEventListener('click', () => this.remove(toast));
+
+        return toast;
+    }
+
+    remove(toast) {
+        if (!this.toasts.has(toast)) return;
+
+        toast.style.transform = 'translateX(100%)';
+        toast.style.opacity = '0';
+
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+            this.toasts.delete(toast);
+        }, 300);
+    }
+
+    success(message, duration) {
+        return this.show(message, 'success', duration);
+    }
+
+    error(message, duration) {
+        return this.show(message, 'error', duration);
+    }
+
+    warning(message, duration) {
+        return this.show(message, 'warning', duration);
+    }
+
+    info(message, duration) {
+        return this.show(message, 'info', duration);
+    }
+}
+
+// ===== Search Manager =====
+class SearchManager {
+    constructor() {
+        this.searchInput = document.getElementById('searchInput');
+        this.searchSubmit = document.getElementById('searchSubmit');
+        this.searchClear = document.getElementById('clearSearch');
+        this.loadingOverlay = document.getElementById('loadingOverlay');
+        this.resultsSection = document.getElementById('resultsSection');
+        this.searchSuggestions = document.getElementById('searchSuggestions');
+        
+        this.currentNetwork = 'mainnet';
+        this.searchHistory = JSON.parse(localStorage.getItem('suiscope-search-history') || '[]');
+        
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.initNetworkSelector();
+        this.initSuggestions();
+        this.updateSearchState();
+    }
+
+    setupEventListeners() {
+        // Search input
+        this.searchInput?.addEventListener('input', (e) => {
+            this.handleSearchInput(e.target.value);
+            this.updateSearchState();
+        });
+
+        this.searchInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.performSearch();
+            } else if (e.key === 'Escape') {
+                this.clearSearch();
+            }
+        });
+
+        // Search buttons
+        this.searchSubmit?.addEventListener('click', () => this.performSearch());
+        this.searchClear?.addEventListener('click', () => this.clearSearch());
+
+        // Suggestions
+        this.searchSuggestions?.addEventListener('click', (e) => {
+            const suggestionItem = e.target.closest('.suggestion-item');
+            if (suggestionItem) {
+                const title = suggestionItem.querySelector('.suggestion-title')?.textContent;
+                const subtitle = suggestionItem.querySelector('.suggestion-subtitle')?.textContent;
+                this.searchInput.value = subtitle || title;
+                this.performSearch();
+            }
+        });
+    }
+
+    initNetworkSelector() {
+        const networkTabs = document.querySelectorAll('.network-tab');
+        networkTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs
+                networkTabs.forEach(t => t.classList.remove('active'));
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                // Update current network
+                this.currentNetwork = tab.dataset.network;
+                
+                // Show toast
+                const networkName = tab.textContent.trim();
+                toastManager.info(`Switched to ${networkName}`);
+            });
+        });
+    }
+
+    initSuggestions() {
+        // Populate with search history
+        this.updateSuggestions();
+    }
+
+    handleSearchInput(value) {
+        // Auto-detect input type and show relevant suggestions
+        if (value.length > 2) {
+            this.showSuggestions();
+        } else {
+            this.hideSuggestions();
+        }
+    }
+
+    showSuggestions() {
+        if (this.searchSuggestions) {
+            this.searchSuggestions.style.opacity = '1';
+            this.searchSuggestions.style.transform = 'translateY(0)';
+            this.searchSuggestions.style.pointerEvents = 'all';
+        }
+    }
+
+    hideSuggestions() {
+        if (this.searchSuggestions) {
+            this.searchSuggestions.style.opacity = '0';
+            this.searchSuggestions.style.transform = 'translateY(-10px)';
+            this.searchSuggestions.style.pointerEvents = 'none';
+        }
+    }
+
+    updateSuggestions() {
+        // This would normally fetch suggestions from an API
+        // For demo purposes, we'll use static suggestions
+    }
+
+    updateSearchState() {
+        const hasValue = this.searchInput?.value.trim().length > 0;
+        
+        if (this.searchClear) {
+            this.searchClear.style.opacity = hasValue ? '1' : '0';
+            this.searchClear.style.pointerEvents = hasValue ? 'all' : 'none';
+        }
+    }
+
+    async performSearch() {
+        const query = this.searchInput?.value.trim();
+        if (!query) {
+            toastManager.warning('Please enter a search query');
+            return;
+        }
+
+        this.showLoading();
+        this.hideSuggestions();
+        
+        try {
+            // Simulate API call
+            await this.simulateSearch(query);
+            
+            // Add to search history
+            this.addToHistory(query);
+            
+            // Show results
+            this.showResults();
+            
+            // Scroll to results
+            this.resultsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            toastManager.success('Search completed successfully!');
+            
+        } catch (error) {
+            console.error('Search error:', error);
+            toastManager.error('Search failed. Please try again.');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async simulateSearch(query) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+        
+        // Simulate potential error (5% chance)
+        if (Math.random() < 0.05) {
+            throw new Error('Network error');
+        }
+    }
+
+    addToHistory(query) {
+        this.searchHistory = this.searchHistory.filter(item => item !== query);
+        this.searchHistory.unshift(query);
+        this.searchHistory = this.searchHistory.slice(0, 10); // Keep last 10
+        localStorage.setItem('suiscope-search-history', JSON.stringify(this.searchHistory));
+    }
+
+    clearSearch() {
+        if (this.searchInput) {
+            this.searchInput.value = '';
+            this.searchInput.focus();
+        }
+        this.updateSearchState();
+        this.hideSuggestions();
+    }
+
+    showLoading() {
+        if (this.loadingOverlay) {
+            this.loadingOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    hideLoading() {
+        if (this.loadingOverlay) {
+            this.loadingOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+
+    showResults() {
+        if (this.resultsSection) {
+            this.resultsSection.style.display = 'block';
+            // Trigger animation
+            requestAnimationFrame(() => {
+                this.resultsSection.style.opacity = '1';
+                this.resultsSection.style.transform = 'translateY(0)';
+            });
+        }
+    }
+}
+
+// ===== Result Manager =====
+class ResultManager {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.setupCopyButtons();
+        this.setupFilters();
+        this.setupLoadMore();
+    }
+
+    setupCopyButtons() {
+        document.addEventListener('click', async (e) => {
+            const copyBtn = e.target.closest('.copy-btn');
+            if (!copyBtn) return;
+
+            const value = copyBtn.dataset.value;
+            if (!value) return;
+
+            try {
+                await navigator.clipboard.writeText(value);
+                
+                // Visual feedback
+                const originalIcon = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+                copyBtn.style.background = 'var(--color-success)';
+                copyBtn.style.color = 'white';
+                
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalIcon;
+                    copyBtn.style.background = '';
+                    copyBtn.style.color = '';
+                }, 1000);
+                
+                toastManager.success('Copied to clipboard!', 2000);
+                
+            } catch (error) {
+                console.error('Copy failed:', error);
+                toastManager.error('Failed to copy to clipboard');
+            }
+        });
+    }
+
+    setupFilters() {
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+                this.applyFilter(filter);
+                
+                // Update active state
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                // Animate results
+                this.animateFilterChange();
+            });
+        });
+    }
+
+    applyFilter(filter) {
+        const resultItems = document.querySelectorAll('.result-item');
+        
+        resultItems.forEach(item => {
+            const shouldShow = filter === 'all' || item.dataset.type === filter;
+            
+            if (shouldShow) {
+                item.style.display = 'block';
+                // Stagger the animation
+                setTimeout(() => {
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateY(0)';
+                }, Math.random() * 200);
+            } else {
+                item.style.opacity = '0';
+                item.style.transform = 'translateY(-20px)';
+                setTimeout(() => {
+                    item.style.display = 'none';
+                }, 300);
+            }
+        });
+    }
+
+    animateFilterChange() {
+        const resultsList = document.querySelector('.results-list');
+        if (resultsList) {
+            resultsList.style.opacity = '0.7';
+            resultsList.style.transform = 'scale(0.98)';
+            
+            setTimeout(() => {
+                resultsList.style.opacity = '1';
+                resultsList.style.transform = 'scale(1)';
+            }, 200);
+        }
+    }
+
+    setupLoadMore() {
+        const loadMoreBtn = document.querySelector('.load-more-btn');
+        loadMoreBtn?.addEventListener('click', async () => {
+            const originalText = loadMoreBtn.innerHTML;
+            
+            // Show loading state
+            loadMoreBtn.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    Loading...
+                </div>
+            `;
+            loadMoreBtn.disabled = true;
+            
+            try {
+                // Simulate loading more results
+                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+                
+                // Restore button
+                loadMoreBtn.innerHTML = originalText;
+                loadMoreBtn.disabled = false;
+                
+                toastManager.info('More results loaded');
+                
+            } catch (error) {
+                console.error('Load more error:', error);
+                loadMoreBtn.innerHTML = originalText;
+                loadMoreBtn.disabled = false;
+                toastManager.error('Failed to load more results');
+            }
+        });
+    }
+}
+
+// ===== Navigation Manager =====
+class NavigationManager {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.setupTabNavigation();
+        this.setupMobileMenu();
+    }
+
+    setupTabNavigation() {
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const tab = item.dataset.tab;
+                
+                // Update active state
+                navItems.forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+                
+                // Handle tab switching (would load different content)
+                this.switchTab(tab);
+            });
+        });
+    }
+
+    switchTab(tab) {
+        // This would handle switching between different app sections
+        const tabNames = {
+            'search': 'Search',
+            'analytics': 'Analytics',
+            'explorer': 'Explorer'
+        };
+        
+        if (tab !== 'search') {
+            toastManager.info(`${tabNames[tab]} section coming soon!`);
+        }
+    }
+
+    setupMobileMenu() {
+        // Handle mobile navigation if needed
+        // This would be implemented based on the mobile menu design
+    }
+}
+
+// ===== Accessibility Manager =====
+class AccessibilityManager {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.setupKeyboardNavigation();
+        this.setupFocusManagement();
+        this.setupScreenReader();
+    }
+
+    setupKeyboardNavigation() {
+        // Global keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Focus search input with Ctrl/Cmd + K
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
+            }
+            
+            // Escape to clear search or close overlays
+            if (e.key === 'Escape') {
+                // Close loading overlay
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                if (loadingOverlay?.classList.contains('active')) {
+                    loadingOverlay.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            }
+        });
+    }
+
+    setupFocusManagement() {
+        // Ensure focus is visible and properly managed
+        document.addEventListener('focusin', (e) => {
+            // Add focus ring for keyboard users
+            if (!e.target.matches(':focus-visible')) {
+                e.target.setAttribute('data-keyboard-focus', 'true');
+            }
+        });
+
+        document.addEventListener('focusout', (e) => {
+            e.target.removeAttribute('data-keyboard-focus');
+        });
+    }
+
+    setupScreenReader() {
+        // Add ARIA labels and descriptions where needed
+        this.updateAriaLabels();
+    }
+
+    updateAriaLabels() {
+        // Dynamic ARIA label updates
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.setAttribute('aria-label', 'Search the Sui Network');
+            searchInput.setAttribute('aria-describedby', 'search-help');
+        }
+    }
+}
+
+// ===== Animation Manager =====
+class AnimationManager {
+    constructor() {
+        this.observer = null;
+        this.init();
+    }
+
+    init() {
+        this.setupIntersectionObserver();
+        this.setupHoverEffects();
+        this.setupMicroInteractions();
+    }
+
+    setupIntersectionObserver() {
+        // Animate elements as they come into view
+        this.observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate-in');
+                        this.observer.unobserve(entry.target);
+                    }
+                });
+            },
+            { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+        );
+
+        // Observe animatable elements
+        document.querySelectorAll('.stat-card, .result-item').forEach(el => {
+            this.observer.observe(el);
+        });
+    }
+
+    setupHoverEffects() {
+        // Enhanced hover effects for interactive elements
+        document.querySelectorAll('.result-item, .stat-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                this.addHoverEffect(card);
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                this.removeHoverEffect(card);
+            });
+        });
+    }
+
+    addHoverEffect(element) {
+        element.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        
+        // Add subtle glow effect
+        if (element.classList.contains('result-item')) {
+            element.style.boxShadow = '0 20px 25px -5px rgba(77, 162, 255, 0.1), 0 8px 10px -6px rgba(77, 162, 255, 0.1)';
+        }
+    }
+
+    removeHoverEffect(element) {
+        // Reset to default state
+        setTimeout(() => {
+            element.style.boxShadow = '';
+        }, 300);
+    }
+
+    setupMicroInteractions() {
+        // Button click animations
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (button && !button.disabled) {
+                this.buttonClickEffect(button);
+            }
+        });
+    }
+
+    buttonClickEffect(button) {
+        // Create ripple effect
+        const rect = button.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = e.clientX - rect.left - size / 2;
+        const y = e.clientY - rect.top - size / 2;
+        
+        const ripple = document.createElement('div');
+        ripple.style.cssText = `
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            width: ${size}px;
+            height: ${size}px;
+            left: ${x}px;
+            top: ${y}px;
+            transform: scale(0);
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+        `;
+        
+        // Add ripple animation keyframes if not already added
+        if (!document.getElementById('ripple-keyframes')) {
+            const style = document.createElement('style');
+            style.id = 'ripple-keyframes';
+            style.textContent = `
+                @keyframes ripple {
+                    to {
+                        transform: scale(2);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        button.style.position = 'relative';
+        button.style.overflow = 'hidden';
+        button.appendChild(ripple);
+        
+        setTimeout(() => {
+            ripple.remove();
+        }, 600);
+    }
+}
+
+// ===== Performance Manager =====
+class PerformanceManager {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.setupLazyLoading();
+        this.setupVirtualScrolling();
+        this.optimizeAnimations();
+    }
+
+    setupLazyLoading() {
+        // Lazy load images and heavy content
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.removeAttribute('data-src');
+                            observer.unobserve(img);
+                        }
+                    }
+                });
+            },
+            { rootMargin: '50px' }
+        );
+
+        document.querySelectorAll('img[data-src]').forEach(img => {
+            observer.observe(img);
+        });
+    }
+
+    setupVirtualScrolling() {
+        // Implement virtual scrolling for large result sets
+        // This would be implemented when handling thousands of results
+    }
+
+    optimizeAnimations() {
+        // Respect user's motion preferences
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        
+        if (reduceMotion.matches) {
+            document.documentElement.classList.add('reduce-motion');
+        }
+        
+        reduceMotion.addEventListener('change', () => {
+            if (reduceMotion.matches) {
+                document.documentElement.classList.add('reduce-motion');
+            } else {
+                document.documentElement.classList.remove('reduce-motion');
+            }
+        });
+    }
+}
+
+// ===== Error Manager =====
+class ErrorManager {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.setupGlobalErrorHandling();
+        this.setupOfflineDetection();
+    }
+
+    setupGlobalErrorHandling() {
+        window.addEventListener('error', (e) => {
+            console.error('Global error:', e);
+            toastManager.error('An unexpected error occurred');
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled promise rejection:', e);
+            toastManager.error('A network error occurred');
+        });
+    }
+
+    setupOfflineDetection() {
+        window.addEventListener('online', () => {
+            toastManager.success('Connection restored');
+        });
+
+        window.addEventListener('offline', () => {
+            toastManager.warning('You are now offline');
+        });
+    }
+}
+
+// ===== Initialize Application =====
+class SuiScopeApp {
+    constructor() {
+        this.managers = {};
+        this.init();
+    }
+
+    async init() {
+        try {
+            // Wait for DOM to be ready
+            if (document.readyState === 'loading') {
+                await new Promise(resolve => {
+                    document.addEventListener('DOMContentLoaded', resolve);
+                });
+            }
+
+            // Initialize all managers
+            this.managers.theme = new ThemeManager();
+            this.managers.toast = new ToastManager();
+            this.managers.search = new SearchManager();
+            this.managers.result = new ResultManager();
+            this.managers.navigation = new NavigationManager();
+            this.managers.accessibility = new AccessibilityManager();
+            this.managers.animation = new AnimationManager();
+            this.managers.performance = new PerformanceManager();
+            this.managers.error = new ErrorManager();
+
+            // Set global toast manager reference
+            window.toastManager = this.managers.toast;
+
+            console.log('🎉 SuiScope initialized successfully!');
+            
+        } catch (error) {
+            console.error('Failed to initialize SuiScope:', error);
+        }
+    }
+
+    // Public API methods
+    search(query, network = 'mainnet') {
+        this.managers.search.searchInput.value = query;
+        this.managers.search.currentNetwork = network;
+        return this.managers.search.performSearch();
+    }
+
+    setTheme(theme) {
+        this.managers.theme.theme = theme;
+        this.managers.theme.applyTheme();
+        this.managers.theme.saveTheme();
+    }
+
+    showToast(message, type = 'info', duration = 5000) {
+        return this.managers.toast.show(message, type, duration);
+    }
+}
+
+// ===== Global Utilities =====
+const utils = {
+    // Format blockchain addresses
+    formatAddress(address, start = 6, end = 4) {
+        if (!address || address.length < start + end) return address;
+        return `${address.slice(0, start)}...${address.slice(-end)}`;
+    },
+
+    // Format large numbers
+    formatNumber(num) {
+        if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+        if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+        if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+        return num.toString();
+    },
+
+    // Format timestamps
+    formatTimestamp(timestamp) {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+
+        if (diff < minute) return 'Just now';
+        if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+        if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+        return `${Math.floor(diff / day)}d ago`;
+    },
+
+    // Debounce function calls
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+
+    // Throttle function calls
+    throttle(func, limit) {
+        let inThrottle;
+        return function() {
+            const args = arguments;
+            const context = this;
+            if (!inThrottle) {
+                func.apply(context, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+};
+
+// ===== Initialize App =====
+let suiScopeApp;
+
+// Start the application
+(async () => {
+    try {
+        suiScopeApp = new SuiScopeApp();
+        
+        // Expose app to global scope for debugging
+        window.suiScope = suiScopeApp;
+        window.utils = utils;
+        
+    } catch (error) {
+        console.error('Failed to start SuiScope:', error);
+    }
+})();
+
+// ===== Service Worker Registration (Optional) =====
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('SW registered: ', registration);
+            })
+            .catch(registrationError => {
+                console.log('SW registration failed: ', registrationError);
+            });
+    });
+}
