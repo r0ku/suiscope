@@ -1,442 +1,411 @@
 /**
- * Main application file for SuiScope
+ * SuiScope - Multi-Network Sui Explorer Search
+ * Simple tool to search across all Sui networks and external explorers
  */
 
-class SuiScopeApp {
+class SuiScope {
     constructor() {
-        this.stats = {
-            totalTransactions: 0,
-            totalObjects: 0,
-            activeAddresses: 0,
-            networkTPS: 0
-        };
+        this.searchInput = null;
+        this.searchForm = null;
+        this.searchButton = null;
+        this.searchSpinner = null;
+        this.searchText = null;
+        this.typeIndicator = null;
+        this.typeValue = null;
+        this.resultsSection = null;
+        this.resultsGrid = null;
         
-        this.recentActivity = [];
-        this.statsUpdateInterval = null;
-        this.activityUpdateInterval = null;
+        this.networks = ['mainnet', 'testnet', 'devnet'];
+        this.explorers = [
+            {
+                name: 'SuiScan',
+                domain: 'suiscan.xyz',
+                mainnet: 'https://suiscan.xyz/mainnet',
+                testnet: 'https://suiscan.xyz/testnet',
+                devnet: 'https://suiscan.xyz/devnet'
+            },
+            {
+                name: 'SuiVision', 
+                domain: 'suivision.xyz',
+                mainnet: 'https://suivision.xyz',
+                testnet: 'https://testnet.suivision.xyz',
+                devnet: 'https://devnet.suivision.xyz'
+            }
+        ];
         
         this.init();
     }
 
     init() {
+        this.bindElements();
         this.bindEvents();
-        this.loadInitialData();
-        this.startPeriodicUpdates();
+        this.loadFromURL();
+    }
+
+    bindElements() {
+        this.searchInput = document.getElementById('searchInput');
+        this.searchForm = document.getElementById('searchForm');
+        this.searchButton = document.getElementById('searchButton');
+        this.searchSpinner = document.getElementById('searchSpinner');
+        this.searchText = this.searchButton?.querySelector('.search-text');
+        this.typeIndicator = document.getElementById('typeIndicator');
+        this.typeValue = document.getElementById('typeValue');
+        this.resultsSection = document.getElementById('resultsSection');
+        this.resultsGrid = document.getElementById('resultsGrid');
     }
 
     bindEvents() {
-        // Mobile menu toggle
-        const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
-        const nav = document.querySelector('.nav');
+        // Search form submission
+        this.searchForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleSearch();
+        });
+
+        // Input type detection as user types
+        this.searchInput?.addEventListener('input', (e) => {
+            this.detectInputType(e.target.value);
+        });
+
+        // Clear type indicator when input is empty
+        this.searchInput?.addEventListener('input', (e) => {
+            if (!e.target.value.trim()) {
+                this.hideTypeIndicator();
+            }
+        });
+
+        // Load from URL parameters on page load
+        this.loadFromURL();
+    }
+
+    /**
+     * Detect what type of input the user has entered
+     * @param {string} input - The user input
+     * @returns {string|null} - The detected type or null
+     */
+    detectInputType(input) {
+        const trimmed = input.trim();
         
-        if (mobileMenuToggle && nav) {
-            mobileMenuToggle.addEventListener('click', () => {
-                nav.classList.toggle('active');
-                mobileMenuToggle.classList.toggle('active');
-            });
+        if (!trimmed) {
+            this.hideTypeIndicator();
+            return null;
         }
 
-        // Navigation links
-        const navLinks = document.querySelectorAll('.nav-link');
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleNavigation(link);
-            });
-        });
+        let detectedType = null;
+        
+        // Transaction hash: 64 hex characters
+        if (/^[a-fA-F0-9]{64}$/.test(trimmed)) {
+            detectedType = 'Transaction Hash';
+        }
+        // Sui address: 0x followed by 40 hex characters
+        else if (/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+            detectedType = 'Address';
+        }
+        // Object ID: 0x followed by hex characters (variable length, typically 64)
+        else if (/^0x[a-fA-F0-9]{8,}$/.test(trimmed)) {
+            detectedType = 'Object ID';
+        }
+        // Partial hex input starting with 0x
+        else if (/^0x[a-fA-F0-9]*$/.test(trimmed) && trimmed.length > 2) {
+            detectedType = 'Partial Input (keep typing...)';
+        }
+        // Raw hex (no 0x prefix) - suggest adding 0x
+        else if (/^[a-fA-F0-9]{8,}$/.test(trimmed)) {
+            detectedType = 'Raw Hex (try adding 0x prefix)';
+        }
 
-        // Stat cards click effects
-        const statCards = document.querySelectorAll('.stat-card');
-        statCards.forEach(card => {
-            card.addEventListener('click', () => {
-                this.handleStatCardClick(card);
-            });
-        });
+        if (detectedType) {
+            this.showTypeIndicator(detectedType);
+        } else {
+            this.hideTypeIndicator();
+        }
 
-        // Activity item clicks
-        document.addEventListener('click', (e) => {
-            const activityItem = e.target.closest('.activity-item');
-            if (activityItem) {
-                this.handleActivityClick(activityItem);
-            }
-        });
-
-        // Scroll effects
-        window.addEventListener('scroll', SuiScopeUtils.throttle(() => {
-            this.handleScroll();
-        }, 100));
-
-        // Resize effects
-        window.addEventListener('resize', SuiScopeUtils.throttle(() => {
-            this.handleResize();
-        }, 250));
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            this.handleKeyboardShortcuts(e);
-        });
-
-        // Visibility change (for pausing/resuming updates when tab is hidden)
-        document.addEventListener('visibilitychange', () => {
-            this.handleVisibilityChange();
-        });
+        return detectedType;
     }
 
-    async loadInitialData() {
-        try {
-            // Load network statistics
-            await this.updateNetworkStats();
-            
-            // Load recent activity
-            await this.updateRecentActivity();
-            
-            // Animation delay for stats cards
-            this.animateStatsCards();
-            
-        } catch (error) {
-            console.error('Failed to load initial data:', error);
-            SuiScopeUtils.showNotification('Failed to load some data. Retrying...', 'error');
-            
-            // Retry after delay
-            setTimeout(() => {
-                this.loadInitialData();
-            }, 5000);
+    showTypeIndicator(type) {
+        if (this.typeIndicator && this.typeValue) {
+            this.typeValue.textContent = type;
+            this.typeIndicator.style.display = 'flex';
         }
     }
 
-    async updateNetworkStats() {
-        try {
-            const stats = await SuiScopeAPI.getNetworkStats();
-            
-            this.stats = { ...this.stats, ...stats };
-            this.displayStats();
-            
-        } catch (error) {
-            console.error('Failed to update network stats:', error);
+    hideTypeIndicator() {
+        if (this.typeIndicator) {
+            this.typeIndicator.style.display = 'none';
         }
     }
 
-    displayStats() {
-        const elements = {
-            totalTransactions: document.getElementById('totalTransactions'),
-            totalObjects: document.getElementById('totalObjects'),
-            activeAddresses: document.getElementById('activeAddresses'),
-            networkTPS: document.getElementById('networkTPS')
-        };
-
-        // Animate number changes
-        Object.keys(elements).forEach(key => {
-            const element = elements[key];
-            if (element) {
-                const newValue = this.stats[key];
-                if (key === 'networkTPS') {
-                    this.animateNumber(element, parseFloat(element.textContent) || 0, newValue, 'TPS');
-                } else {
-                    this.animateNumber(element, this.parseNumberFromElement(element), newValue);
-                }
-            }
-        });
-    }
-
-    animateNumber(element, from, to, suffix = '') {
-        if (isNaN(from) || isNaN(to)) {
-            element.textContent = SuiScopeUtils.formatLargeNumber(to) + (suffix ? ` ${suffix}` : '');
+    /**
+     * Handle search submission
+     */
+    async handleSearch() {
+        const query = this.searchInput?.value?.trim();
+        
+        if (!query) {
+            this.showError('Please enter a transaction hash, address, or object ID');
             return;
         }
 
-        const duration = 1500;
-        const startTime = performance.now();
+        const inputType = this.detectInputType(query);
         
-        const animate = (currentTime) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            
-            // Easing function
-            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-            
-            const current = from + (to - from) * easeOutQuart;
-            element.textContent = SuiScopeUtils.formatLargeNumber(Math.floor(current)) + (suffix ? ` ${suffix}` : '');
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
+        if (!inputType || inputType.includes('Partial') || inputType.includes('Raw Hex')) {
+            this.showError('Please enter a complete and valid transaction hash, address, or object ID');
+            return;
+        }
+
+        this.showLoading();
+        this.updateURL(query);
         
-        requestAnimationFrame(animate);
+        // Simulate search delay for better UX
+        setTimeout(() => {
+            this.displayResults(query, inputType);
+            this.hideLoading();
+        }, 500);
     }
 
-    parseNumberFromElement(element) {
-        const text = element.textContent.replace(/[^\d.-]/g, '');
-        return parseFloat(text) || 0;
-    }
+    /**
+     * Display search results from all networks and explorers
+     * @param {string} query - The search query
+     * @param {string} inputType - The detected input type
+     */
+    displayResults(query, inputType) {
+        if (!this.resultsGrid) return;
 
-    animateStatsCards() {
-        const statCards = document.querySelectorAll('.stat-card');
-        
-        statCards.forEach((card, index) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(20px)';
-            
-            setTimeout(() => {
-                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                card.style.opacity = '1';
-                card.style.transform = 'translateY(0)';
-            }, index * 100);
+        // Clear previous results
+        this.resultsGrid.innerHTML = '';
+
+        // Generate results for each network and explorer combination
+        const results = [];
+
+        this.networks.forEach(network => {
+            this.explorers.forEach(explorer => {
+                const url = this.buildExplorerURL(explorer, network, query, inputType);
+                if (url) {
+                    results.push({
+                        explorer: explorer.name,
+                        network: network,
+                        url: url,
+                        query: query,
+                        type: inputType
+                    });
+                }
+            });
+        });
+
+        if (results.length === 0) {
+            this.showNoResults();
+            return;
+        }
+
+        // Render results
+        results.forEach(result => {
+            const card = this.createResultCard(result);
+            this.resultsGrid.appendChild(card);
+        });
+
+        // Show results section
+        this.resultsSection.style.display = 'block';
+
+        // Scroll to results
+        this.resultsSection.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
         });
     }
 
-    async updateRecentActivity() {
-        const activityList = document.getElementById('activityList');
-        if (!activityList) return;
+    /**
+     * Build URL for specific explorer, network, and query type
+     * @param {Object} explorer - Explorer configuration
+     * @param {string} network - Network name (mainnet/testnet/devnet)
+     * @param {string} query - Search query
+     * @param {string} inputType - Input type
+     * @returns {string|null} - Generated URL or null if not supported
+     */
+    buildExplorerURL(explorer, network, query, inputType) {
+        const baseUrl = explorer[network];
+        if (!baseUrl) return null;
 
-        try {
-            // Show loading state
-            activityList.innerHTML = '<div class="activity-loading">Loading recent transactions...</div>';
-            
-            const latestTransactions = await SuiScopeAPI.getLatestTransactions(10);
-            this.recentActivity = latestTransactions.data || [];
-            
-            this.displayRecentActivity();
-            
-        } catch (error) {
-            console.error('Failed to update recent activity:', error);
-            
-            if (activityList) {
-                activityList.innerHTML = SuiScopeUtils.createErrorElement(
-                    'Failed to load recent activity',
-                    true,
-                    () => this.updateRecentActivity()
-                ).outerHTML;
+        // Determine the path based on input type and explorer
+        let path = '';
+        
+        if (explorer.name === 'SuiScan') {
+            switch (inputType) {
+                case 'Transaction Hash':
+                    path = `/tx/${query}`;
+                    break;
+                case 'Address':
+                    path = `/account/${query}`;
+                    break;
+                case 'Object ID':
+                    path = `/object/${query}`;
+                    break;
+                default:
+                    return null;
+            }
+        } else if (explorer.name === 'SuiVision') {
+            switch (inputType) {
+                case 'Transaction Hash':
+                    path = `/txblock/${query}`;
+                    break;
+                case 'Address':
+                    path = `/address/${query}`;
+                    break;
+                case 'Object ID':
+                    path = `/object/${query}`;
+                    break;
+                default:
+                    return null;
             }
         }
+
+        return baseUrl + path;
     }
 
-    displayRecentActivity() {
-        const activityList = document.getElementById('activityList');
-        if (!activityList || !this.recentActivity.length) return;
+    /**
+     * Create a result card element
+     * @param {Object} result - Result data
+     * @returns {HTMLElement} - Result card element
+     */
+    createResultCard(result) {
+        const card = document.createElement('a');
+        card.className = 'result-card';
+        card.href = result.url;
+        card.target = '_blank';
+        card.rel = 'noopener noreferrer';
 
-        const html = this.recentActivity.map(tx => this.renderActivityItem(tx)).join('');
-        activityList.innerHTML = html;
-    }
-
-    renderActivityItem(tx) {
-        const digest = tx.digest;
-        const timestamp = parseInt(tx.timestampMs) || Date.now();
-        const success = tx.effects?.status?.status === 'success';
-        const gasUsed = tx.effects?.gasUsed?.computationCost || 0;
-
-        return `
-            <div class="activity-item" data-tx="${digest}">
-                <div class="activity-header">
-                    <div class="activity-type">
-                        ${success ? '✅' : '❌'} TX
-                    </div>
-                    <div class="activity-time">${SuiScopeUtils.formatRelativeTime(timestamp)}</div>
-                </div>
-                <div class="activity-content">
-                    <a href="#" class="activity-hash" data-hash="${digest}">
-                        ${SuiScopeUtils.truncateHash(digest)}
-                    </a>
-                    <span class="activity-amount">Gas: ${SuiScopeUtils.formatNumber(gasUsed)}</span>
-                </div>
+        card.innerHTML = `
+            <div class="result-header">
+                <div class="result-explorer">${result.explorer}</div>
+                <div class="result-network ${result.network}">${result.network}</div>
+            </div>
+            <div class="result-type">${result.type}</div>
+            <div class="result-id">${this.truncateText(result.query, 50)}</div>
+            <div class="result-action">
+                View on ${result.explorer}
             </div>
         `;
+
+        // Add click tracking (optional)
+        card.addEventListener('click', () => {
+            console.log(`Opening ${result.explorer} ${result.network} for ${result.type}: ${result.query}`);
+        });
+
+        return card;
     }
 
-    handleNavigation(link) {
-        // Remove active class from all nav links
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    /**
+     * Truncate text for better display
+     * @param {string} text - Text to truncate
+     * @param {number} maxLength - Maximum length
+     * @returns {string} - Truncated text
+     */
+    truncateText(text, maxLength) {
+        if (text.length <= maxLength) return text;
         
-        // Add active class to clicked link
-        link.classList.add('active');
-        
-        // Handle navigation based on text content
-        const section = link.textContent.trim().toLowerCase();
-        
-        switch (section) {
-            case 'explorer':
-                // Already on explorer page - scroll to top
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                break;
-            case 'analytics':
-                this.showComingSoon('Analytics Dashboard');
-                break;
-            case 'api':
-                this.showComingSoon('API Documentation');
-                break;
-            case 'about':
-                this.showComingSoon('About SuiScope');
-                break;
+        // For hashes and IDs, show start and end
+        if (text.startsWith('0x') && text.length > 20) {
+            const start = text.substring(0, 10);
+            const end = text.substring(text.length - 6);
+            return `${start}...${end}`;
         }
         
-        // Close mobile menu if open
-        const nav = document.querySelector('.nav');
-        const toggle = document.querySelector('.mobile-menu-toggle');
-        if (nav && toggle) {
-            nav.classList.remove('active');
-            toggle.classList.remove('active');
-        }
+        return text.substring(0, maxLength - 3) + '...';
     }
 
-    handleStatCardClick(card) {
-        // Add click animation
-        card.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-            card.style.transform = '';
-        }, 150);
-
-        // Show more info based on stat type
-        const label = card.querySelector('.stat-label')?.textContent.toLowerCase();
-        
-        switch (true) {
-            case label?.includes('transaction'):
-                this.showComingSoon('Transaction Analytics');
-                break;
-            case label?.includes('object'):
-                this.showComingSoon('Object Explorer');
-                break;
-            case label?.includes('address'):
-                this.showComingSoon('Address Analytics');
-                break;
-            case label?.includes('tps'):
-                this.showComingSoon('Network Performance');
-                break;
-            default:
-                SuiScopeUtils.showNotification('Feature coming soon!', 'info');
+    /**
+     * Show loading state
+     */
+    showLoading() {
+        if (this.searchButton) {
+            this.searchButton.disabled = true;
+        }
+        if (this.searchText) {
+            this.searchText.style.display = 'none';
+        }
+        if (this.searchSpinner) {
+            this.searchSpinner.style.display = 'inline';
         }
     }
 
-    handleActivityClick(activityItem) {
-        const txHash = activityItem.dataset.tx;
-        if (txHash) {
-            // Simulate searching for the transaction
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput && window.searchManager) {
-                searchInput.value = txHash;
-                window.searchManager.handleSearch(txHash);
-            }
+    /**
+     * Hide loading state
+     */
+    hideLoading() {
+        if (this.searchButton) {
+            this.searchButton.disabled = false;
+        }
+        if (this.searchText) {
+            this.searchText.style.display = 'inline';
+        }
+        if (this.searchSpinner) {
+            this.searchSpinner.style.display = 'none';
         }
     }
 
-    handleScroll() {
-        const header = document.querySelector('.header');
-        if (!header) return;
+    /**
+     * Show error message
+     * @param {string} message - Error message
+     */
+    showError(message) {
+        if (!this.resultsGrid) return;
 
-        const scrolled = window.scrollY > 20;
-        
-        if (scrolled) {
-            header.classList.add('scrolled');
+        this.resultsGrid.innerHTML = `
+            <div class="error-message" style="grid-column: 1 / -1;">
+                <div class="error-title">Invalid Input</div>
+                <p>${message}</p>
+            </div>
+        `;
+
+        this.resultsSection.style.display = 'block';
+    }
+
+    /**
+     * Show no results message
+     */
+    showNoResults() {
+        if (!this.resultsGrid) return;
+
+        this.resultsGrid.innerHTML = `
+            <div class="no-results" style="grid-column: 1 / -1;">
+                <h3>Unable to Generate Explorer Links</h3>
+                <p>Please check your input format and try again.</p>
+            </div>
+        `;
+
+        this.resultsSection.style.display = 'block';
+    }
+
+    /**
+     * Update URL with search query
+     * @param {string} query - Search query
+     */
+    updateURL(query) {
+        const url = new URL(window.location);
+        if (query) {
+            url.searchParams.set('q', query);
         } else {
-            header.classList.remove('scrolled');
+            url.searchParams.delete('q');
         }
+        window.history.pushState({}, '', url);
     }
 
-    handleResize() {
-        // Close mobile menu on resize to larger screen
-        if (window.innerWidth > 1023) {
-            const nav = document.querySelector('.nav');
-            const toggle = document.querySelector('.mobile-menu-toggle');
-            
-            if (nav && toggle) {
-                nav.classList.remove('active');
-                toggle.classList.remove('active');
-            }
-        }
-    }
-
-    handleKeyboardShortcuts(e) {
-        // Ctrl/Cmd + K to focus search
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
-        }
+    /**
+     * Load search from URL parameters
+     */
+    loadFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('q');
         
-        // Escape to clear search or close overlays
-        if (e.key === 'Escape') {
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput === document.activeElement) {
-                searchInput.blur();
-            }
-            
-            // Close mobile menu
-            const nav = document.querySelector('.nav');
-            const toggle = document.querySelector('.mobile-menu-toggle');
-            if (nav?.classList.contains('active')) {
-                nav.classList.remove('active');
-                toggle?.classList.remove('active');
-            }
+        if (query && this.searchInput) {
+            this.searchInput.value = query;
+            this.detectInputType(query);
+            this.handleSearch();
         }
-    }
-
-    handleVisibilityChange() {
-        if (document.hidden) {
-            this.pauseUpdates();
-        } else {
-            this.resumeUpdates();
-        }
-    }
-
-    startPeriodicUpdates() {
-        // Update stats every 30 seconds
-        this.statsUpdateInterval = setInterval(() => {
-            this.updateNetworkStats();
-        }, 30000);
-        
-        // Update activity every 15 seconds
-        this.activityUpdateInterval = setInterval(() => {
-            this.updateRecentActivity();
-        }, 15000);
-    }
-
-    pauseUpdates() {
-        if (this.statsUpdateInterval) {
-            clearInterval(this.statsUpdateInterval);
-        }
-        if (this.activityUpdateInterval) {
-            clearInterval(this.activityUpdateInterval);
-        }
-    }
-
-    resumeUpdates() {
-        this.startPeriodicUpdates();
-        // Immediately update when resuming
-        this.updateNetworkStats();
-        this.updateRecentActivity();
-    }
-
-    showComingSoon(feature) {
-        SuiScopeUtils.showNotification(`${feature} coming soon! 🚀`, 'info', 4000);
-    }
-
-    // Cleanup method
-    destroy() {
-        this.pauseUpdates();
-        
-        // Remove event listeners
-        window.removeEventListener('scroll', this.handleScroll);
-        window.removeEventListener('resize', this.handleResize);
-        document.removeEventListener('keydown', this.handleKeyboardShortcuts);
-        document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     }
 }
 
 // Initialize app when DOM is ready
-SuiScopeUtils.ready(() => {
-    // Create global app instance
-    window.suiScopeApp = new SuiScopeApp();
-    
-    console.log('🔍 SuiScope initialized successfully!');
-    
-    // Add some helpful console commands for development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.log('🔧 Development mode detected. Available commands:');
-        console.log('- suiScopeApp.updateNetworkStats() - Refresh network statistics');
-        console.log('- suiScopeApp.updateRecentActivity() - Refresh recent activity');
-        console.log('- SuiScopeAPI.search("query") - Test search functionality');
-        console.log('- SuiScopeUtils.showNotification("message", "type") - Test notifications');
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    window.suiScope = new SuiScope();
+    console.log('🔍 SuiScope initialized - Multi-network Sui explorer search ready!');
 });

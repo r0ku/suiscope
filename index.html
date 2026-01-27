@@ -3,188 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuiScope - Sui Network Explorer</title>
-    <meta name="description" content="Explore the Sui blockchain with SuiScope - your comprehensive Sui network explorer and analytics platform.">
+    <title>SuiScope - Multi-Network Sui Explorer Search</title>
+    <meta name="description" content="Search transactions, addresses, and objects across all Sui networks (mainnet, testnet, devnet) and view results in popular explorers.">
     
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <link rel="icon" type="image/png" href="assets/favicon.png">
-    
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/components.css">
-    <link rel="stylesheet" href="styles/responsive.css">
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <svg class="logo-icon" viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
-                        <path d="M12 16l4 4 8-8" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                    <h1>SuiScope</h1>
+    <!-- Main Container -->
+    <main class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">
+                <span class="logo">🔍</span>
+                SuiScope
+            </h1>
+            <p class="subtitle">Search across all Sui networks and explorers</p>
+        </header>
+
+        <!-- Search Section -->
+        <section class="search-section">
+            <form class="search-form" id="searchForm">
+                <div class="input-container">
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        id="searchInput"
+                        placeholder="Enter transaction hash, address, or object ID..."
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <button type="submit" class="search-button" id="searchButton">
+                        <span class="search-text">Search</span>
+                        <span class="search-spinner" id="searchSpinner" style="display: none;">⏳</span>
+                    </button>
                 </div>
                 
-                <nav class="nav">
-                    <a href="#" class="nav-link active">Explorer</a>
-                    <a href="#" class="nav-link">Analytics</a>
-                    <a href="#" class="nav-link">API</a>
-                    <a href="#" class="nav-link">About</a>
-                </nav>
-
-                <button class="mobile-menu-toggle" aria-label="Toggle mobile menu">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="main">
-        <!-- Hero Section -->
-        <section class="hero">
-            <div class="container">
-                <div class="hero-content">
-                    <h2 class="hero-title">Explore the Sui Network</h2>
-                    <p class="hero-subtitle">Search transactions, addresses, objects, and more on the Sui blockchain</p>
-                    
-                    <!-- Search Form -->
-                    <form class="search-form" id="searchForm">
-                        <div class="search-container">
-                            <input 
-                                type="text" 
-                                class="search-input" 
-                                id="searchInput"
-                                placeholder="Enter transaction hash, address, object ID..."
-                                autocomplete="off"
-                            >
-                            <button type="submit" class="search-button">
-                                <svg class="search-icon" viewBox="0 0 24 24" fill="none">
-                                    <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
-                                    <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2"/>
-                                </svg>
-                                Search
-                            </button>
-                        </div>
-                        <div class="search-suggestions" id="searchSuggestions"></div>
-                    </form>
-
-                    <!-- Quick Stats -->
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-value" id="totalTransactions">-</div>
-                            <div class="stat-label">Total Transactions</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="totalObjects">-</div>
-                            <div class="stat-label">Total Objects</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="activeAddresses">-</div>
-                            <div class="stat-label">Active Addresses</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="networkTPS">-</div>
-                            <div class="stat-label">Current TPS</div>
-                        </div>
-                    </div>
+                <!-- Input Type Detection -->
+                <div class="type-indicator" id="typeIndicator" style="display: none;">
+                    <span class="type-label">Detected:</span>
+                    <span class="type-value" id="typeValue"></span>
                 </div>
-            </div>
+            </form>
         </section>
 
         <!-- Results Section -->
         <section class="results-section" id="resultsSection" style="display: none;">
-            <div class="container">
-                <div class="results-header">
-                    <h3 class="results-title">Search Results</h3>
-                    <div class="results-count" id="resultsCount">0 results</div>
-                </div>
-                
-                <div class="results-container">
-                    <div class="results-filters">
-                        <button class="filter-button active" data-filter="all">All</button>
-                        <button class="filter-button" data-filter="transactions">Transactions</button>
-                        <button class="filter-button" data-filter="addresses">Addresses</button>
-                        <button class="filter-button" data-filter="objects">Objects</button>
-                        <button class="filter-button" data-filter="packages">Packages</button>
-                    </div>
-                    
-                    <div class="results-list" id="resultsList">
-                        <!-- Results will be populated here -->
-                    </div>
-                    
-                    <div class="results-pagination" id="resultsPagination" style="display: none;">
-                        <button class="pagination-button" id="prevPage">Previous</button>
-                        <div class="pagination-info" id="paginationInfo">Page 1 of 1</div>
-                        <button class="pagination-button" id="nextPage">Next</button>
-                    </div>
-                </div>
+            <h2 class="results-title">Search Results</h2>
+            <div class="results-grid" id="resultsGrid">
+                <!-- Results will be populated here -->
             </div>
         </section>
 
-        <!-- Recent Activity -->
-        <section class="recent-activity">
-            <div class="container">
-                <h3 class="section-title">Recent Activity</h3>
-                <div class="activity-list" id="activityList">
-                    <div class="activity-loading">Loading recent transactions...</div>
-                </div>
-            </div>
+        <!-- Instructions -->
+        <section class="instructions">
+            <h3>How to use:</h3>
+            <ul>
+                <li>Enter a transaction hash (64 hex characters)</li>
+                <li>Enter an address (0x followed by 40 hex characters)</li>
+                <li>Enter an object ID (0x followed by hex characters)</li>
+                <li>Search across mainnet, testnet, and devnet simultaneously</li>
+                <li>Click any result to open it in the respective explorer</li>
+            </ul>
         </section>
     </main>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>SuiScope</h4>
-                    <p>Your comprehensive Sui blockchain explorer</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Resources</h4>
-                    <a href="#" class="footer-link">API Documentation</a>
-                    <a href="#" class="footer-link">Developer Guide</a>
-                    <a href="#" class="footer-link">FAQ</a>
-                </div>
-                <div class="footer-section">
-                    <h4>Community</h4>
-                    <a href="#" class="footer-link">GitHub</a>
-                    <a href="#" class="footer-link">Discord</a>
-                    <a href="#" class="footer-link">Twitter</a>
-                </div>
-                <div class="footer-section">
-                    <h4>Legal</h4>
-                    <a href="#" class="footer-link">Privacy Policy</a>
-                    <a href="#" class="footer-link">Terms of Service</a>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2024 SuiScope. Open source blockchain explorer.</p>
-            </div>
-        </div>
-    </footer>
-
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
-        <div class="loading-spinner"></div>
-        <p>Searching...</p>
-    </div>
-
     <!-- Scripts -->
-    <script src="js/utils.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/search.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>
