@@ -1,0 +1,39 @@
+{
+  "name": "suiscope",
+  "version": "1.0.0",
+  "description": "A modern, responsive blockchain explorer for the Sui Network",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "dev": "python -m http.server 8000",
+    "serve": "npx http-server -p 8000 -o"
+  },
+  "keywords": [
+    "sui",
+    "blockchain",
+    "explorer",
+    "cryptocurrency",
+    "web3",
+    "dapp",
+    "frontend",
+    "responsive"
+  ],
+  "author": "SuiScope Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/r0ku/suiscope.git"
+  },
+  "homepage": "https://r0ku.github.io/suiscope",
+  "bugs": {
+    "url": "https://github.com/r0ku/suiscope/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not ie < 11"
+  ]
+}
