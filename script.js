@@ -162,9 +162,9 @@ class InputTypeDetector {
         // Address/Object ID: 0x + exactly 64 hex characters = 66 total chars
         if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
             if (trimmed.length === 66) {
-                // For addresses and objects, we'll treat them the same initially
-                // Could be refined later based on specific patterns if needed
-                return { type: 'address', confidence: 0.9 };
+                // For 0x+64hex inputs, they could be either address or object
+                // Mark as ambiguous for UI switching capability
+                return { type: 'address', confidence: 0.9, isAmbiguous: true };
             }
         }
 
@@ -200,6 +200,9 @@ class SearchManager {
         this.noResults = document.getElementById('noResults');
         this.searchTypeDisplay = document.getElementById('searchTypeDisplay');
         this.searchTypeValue = document.getElementById('searchTypeValue');
+        this.typeSwitchControls = document.getElementById('typeSwitchControls');
+        this.switchToAddress = document.getElementById('switchToAddress');
+        this.switchToObject = document.getElementById('switchToObject');
         this.resultsList = document.getElementById('resultsList');
         this.resultsQuery = document.getElementById('resultsQuery');
 
@@ -225,6 +228,7 @@ class SearchManager {
 
         this.currentQuery = '';
         this.currentType = '';
+        this.isAmbiguous = false;
         this.searchTimeout = null;
 
         this.init();
@@ -250,6 +254,10 @@ class SearchManager {
             }
         });
 
+        // Type switching button events
+        this.switchToAddress.addEventListener('click', () => this.switchType('address'));
+        this.switchToObject.addEventListener('click', () => this.switchType('object'));
+
         // Initial type detection
         this.onInputChange();
     }
@@ -264,6 +272,15 @@ class SearchManager {
             this.searchTypeValue.textContent = `${detection.type} (${Math.round(detection.confidence * 100)}% confident)`;
             this.searchTypeDisplay.classList.add('visible');
             
+            // Show type switching controls for ambiguous IDs
+            if (detection.isAmbiguous) {
+                this.typeSwitchControls.style.display = 'flex';
+                this.isAmbiguous = true;
+            } else {
+                this.typeSwitchControls.style.display = 'none';
+                this.isAmbiguous = false;
+            }
+            
             // Auto-search after typing stops for 1 second
             this.searchTimeout = setTimeout(() => {
                 if (query.length >= 10) { // Only auto-search for longer inputs
@@ -273,9 +290,31 @@ class SearchManager {
         } else if (query) {
             this.searchTypeValue.textContent = 'Unknown format';
             this.searchTypeDisplay.classList.add('visible');
+            this.typeSwitchControls.style.display = 'none';
+            this.isAmbiguous = false;
         } else {
             this.searchTypeDisplay.classList.remove('visible');
+            this.typeSwitchControls.style.display = 'none';
+            this.isAmbiguous = false;
         }
+    }
+
+    switchType(newType) {
+        if (!this.isAmbiguous || !this.currentQuery) return;
+        
+        this.currentType = newType;
+        
+        // Update button states
+        this.switchToAddress.classList.toggle('active', newType === 'address');
+        this.switchToObject.classList.toggle('active', newType === 'object');
+        
+        // Update detection display text
+        this.searchTypeValue.textContent = `${newType} (user selected)`;
+        
+        // Refresh results with new type
+        this.refreshResults();
+        
+        window.toastManager.info(`Switched to ${newType} view`);
     }
 
     getSelectedExplorer() {
@@ -288,6 +327,13 @@ class SearchManager {
         this.searchInput.focus();
         this.currentQuery = '';
         this.currentType = '';
+        this.isAmbiguous = false;
+        
+        // Reset type switching controls
+        this.typeSwitchControls.style.display = 'none';
+        this.switchToAddress.classList.add('active');
+        this.switchToObject.classList.remove('active');
+        
         this.hideAllSections();
         this.onInputChange();
         clearTimeout(this.searchTimeout);
@@ -310,6 +356,7 @@ class SearchManager {
 
         this.currentQuery = query;
         this.currentType = detection.type;
+        this.isAmbiguous = detection.isAmbiguous || false;
 
         this.showLoading();
         this.hideAllSections();
@@ -374,18 +421,16 @@ class SearchManager {
         
         resultDiv.innerHTML = `
             <div class="result-header">
-                <div class="result-type-badge ${typeClass}">
-                    <span class="badge-icon">${this.getTypeIcon(type)}</span>
-                    ${type.charAt(0).toUpperCase() + type.slice(1)}
-                </div>
-                <div class="result-network">
-                    <span class="network-badge ${networkClass}">${network.charAt(0).toUpperCase() + network.slice(1)}</span>
-                </div>
                 <div class="result-actions">
                     <button class="open-new-tab-btn" onclick="window.open('${explorerUrl}', '_blank')" title="Open in new tab">
                         🔗 Open in New Tab
                     </button>
                 </div>
+            </div>
+            <div class="network-indicator ${networkClass}">
+                <span class="network-icon">${this.getNetworkIcon(network)}</span>
+                <span class="network-name">${network.charAt(0).toUpperCase() + network.slice(1)}</span>
+                <span class="type-indicator">${this.getTypeIcon(type)} ${type.charAt(0).toUpperCase() + type.slice(1)}</span>
             </div>
             <div class="iframe-container">
                 <div class="iframe-loading">Loading ${network} results...</div>
@@ -431,6 +476,15 @@ class SearchManager {
         return icons[type] || '🔍';
     }
 
+    getNetworkIcon(network) {
+        const icons = {
+            mainnet: '🟢',
+            testnet: '🟡', 
+            devnet: '🔵'
+        };
+        return icons[network] || '⚪';
+    }
+
     buildExplorerUrl(type, query, network) {
         const selectedExplorer = this.getSelectedExplorer();
         const explorer = this.explorers[selectedExplorer];
@@ -445,16 +499,16 @@ class SearchManager {
         if (selectedExplorer === 'suiscan') {
             const paths = {
                 transaction: '/tx/',
-                address: '/account/',
-                object: '/object/'
+                address: '/account/',    // Address view for SuiScan
+                object: '/object/'       // Object view for SuiScan
             };
             const path = paths[type] || '/search/';
             return `${baseUrl}${path}${encodeURIComponent(query)}`;
         } else if (selectedExplorer === 'suivision') {
             const paths = {
                 transaction: '/txblock/',
-                address: '/address/',
-                object: '/object/'
+                address: '/address/',    // Address view for SuiVision  
+                object: '/object/'       // Object view for SuiVision
             };
             const path = paths[type] || '/search/';
             return `${baseUrl}${path}${encodeURIComponent(query)}`;
