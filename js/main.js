@@ -1,5 +1,5 @@
 /**
- * SuiScope - Multi-Network Sui Explorer Search
+ * SuiScope - Multi-Network Sui Search
  * Simple tool to search across all Sui networks and external explorers
  */
 
@@ -367,7 +367,7 @@ class SuiScope {
 
         this.resultsGrid.innerHTML = `
             <div class="no-results" style="grid-column: 1 / -1;">
-                <h3>Unable to Generate Explorer Links</h3>
+                <h3>Unable to Generate Search Links</h3>
                 <p>Please check your input format and try again.</p>
             </div>
         `;
