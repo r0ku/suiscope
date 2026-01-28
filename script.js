@@ -150,9 +150,19 @@ class InputTypeDetector {
             return { type: 'unknown', confidence: 0 };
         }
 
+        // Base58 Transaction digest: ~44 chars, Base58 alphabet only (no 0, O, I, l, +, /, =)
+        if (/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{40,50}$/.test(trimmed)) {
+            return { type: 'transaction', confidence: 0.95 };
+        }
+
+        // Base64 Transaction digest: 44 chars ending with =
+        if (/^[A-Za-z0-9+/]{43}=$/.test(trimmed)) {
+            return { type: 'transaction', confidence: 0.9 };
+        }
+
         // Transaction digest: 0x + 64 hex characters (32 bytes)
         if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
-            return { type: 'transaction', confidence: 0.9 };
+            return { type: 'transaction', confidence: 0.85 };
         }
 
         // Address: 0x + up to 64 hex characters
@@ -193,9 +203,9 @@ class SearchManager {
             suiscan: {
                 name: 'SuiScan',
                 baseUrls: {
-                    mainnet: 'https://suiscan.xyz',
-                    testnet: 'https://testnet.suiscan.xyz',
-                    devnet: 'https://devnet.suiscan.xyz'
+                    mainnet: 'https://suiscan.xyz/mainnet',
+                    testnet: 'https://suiscan.xyz/testnet',
+                    devnet: 'https://suiscan.xyz/devnet'
                 }
             },
             suivision: {
@@ -207,6 +217,10 @@ class SearchManager {
                 }
             }
         };
+
+        this.currentQuery = '';
+        this.currentType = '';
+        this.searchTimeout = null;
 
         this.init();
     }
@@ -224,17 +238,33 @@ class SearchManager {
         this.searchSubmit.addEventListener('click', () => this.performSearch());
         this.searchClear.addEventListener('click', () => this.clearSearch());
 
+        // Explorer selection change
+        document.addEventListener('change', (e) => {
+            if (e.target.name === 'explorer' && this.currentQuery) {
+                this.refreshResults();
+            }
+        });
+
         // Initial type detection
         this.onInputChange();
     }
 
     onInputChange() {
+        clearTimeout(this.searchTimeout);
+        
         const query = this.searchInput.value.trim();
         const detection = InputTypeDetector.detect(query);
 
         if (query && detection.type !== 'unknown') {
             this.searchTypeValue.textContent = `${detection.type} (${Math.round(detection.confidence * 100)}% confident)`;
             this.searchTypeDisplay.classList.add('visible');
+            
+            // Auto-search after typing stops for 1 second
+            this.searchTimeout = setTimeout(() => {
+                if (query.length >= 10) { // Only auto-search for longer inputs
+                    this.performSearch();
+                }
+            }, 1000);
         } else if (query) {
             this.searchTypeValue.textContent = 'Unknown format';
             this.searchTypeDisplay.classList.add('visible');
@@ -243,11 +273,19 @@ class SearchManager {
         }
     }
 
+    getSelectedExplorer() {
+        const selected = document.querySelector('input[name="explorer"]:checked');
+        return selected ? selected.value : 'suiscan';
+    }
+
     clearSearch() {
         this.searchInput.value = '';
         this.searchInput.focus();
+        this.currentQuery = '';
+        this.currentType = '';
         this.hideAllSections();
         this.onInputChange();
+        clearTimeout(this.searchTimeout);
     }
 
     async performSearch() {
@@ -265,19 +303,18 @@ class SearchManager {
             return;
         }
 
+        this.currentQuery = query;
+        this.currentType = detection.type;
+
         this.showLoading();
         this.hideAllSections();
 
         try {
-            // Simulate search across all networks
-            // In a real implementation, this would make actual API calls
-            const results = await this.simulateSearch(query, detection.type);
+            // Small delay to show loading animation
+            await new Promise(resolve => setTimeout(resolve, 800));
             
-            if (results.length > 0) {
-                this.displayResults(query, detection.type, results);
-            } else {
-                this.showNoResults();
-            }
+            this.displayResults(query, detection.type);
+            window.toastManager.success('Search completed successfully!');
         } catch (error) {
             console.error('Search error:', error);
             window.toastManager.error('Search failed. Please try again.');
@@ -285,36 +322,34 @@ class SearchManager {
         }
     }
 
-    async simulateSearch(query, type) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Simulate results - in real implementation, make actual API calls
-        const results = [];
+    async refreshResults() {
+        if (!this.currentQuery || !this.currentType) return;
         
-        // Add results for each network (simulated)
+        // Just refresh the iframes with new explorer
+        this.resultsList.innerHTML = '';
+        
         this.networks.forEach(network => {
-            // Simulate that we found the item on this network
-            if (Math.random() > 0.3) { // 70% chance of finding on each network
-                results.push({
-                    network,
-                    type,
-                    query,
-                    found: true
-                });
-            }
+            const resultElement = this.createResultElement({
+                network,
+                type: this.currentType,
+                query: this.currentQuery
+            });
+            this.resultsList.appendChild(resultElement);
         });
-
-        return results;
     }
 
-    displayResults(query, type, results) {
+    displayResults(query, type) {
         this.hideLoading();
         this.resultsQuery.textContent = query;
         this.resultsList.innerHTML = '';
 
-        results.forEach(result => {
-            const resultElement = this.createResultElement(result);
+        // Create results for all networks
+        this.networks.forEach(network => {
+            const resultElement = this.createResultElement({
+                network,
+                type,
+                query
+            });
             this.resultsList.appendChild(resultElement);
         });
 
@@ -340,13 +375,37 @@ class SearchManager {
                     <span class="network-badge ${networkClass}">${network.charAt(0).toUpperCase() + network.slice(1)}</span>
                 </div>
             </div>
-            <div class="result-content">
-                <div class="result-query">${query}</div>
-            </div>
-            <div class="explorer-links">
-                ${this.generateExplorerLinks(query, type, network)}
+            <div class="iframe-container">
+                <div class="iframe-loading">Loading ${network} results...</div>
+                <iframe 
+                    class="result-iframe" 
+                    src="${this.buildExplorerUrl(type, query, network)}"
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                    referrerpolicy="no-referrer"
+                    loading="lazy"
+                ></iframe>
             </div>
         `;
+
+        // Handle iframe load events
+        const iframe = resultDiv.querySelector('.result-iframe');
+        const loadingDiv = resultDiv.querySelector('.iframe-loading');
+        
+        iframe.addEventListener('load', () => {
+            loadingDiv.style.display = 'none';
+        });
+
+        iframe.addEventListener('error', () => {
+            loadingDiv.innerHTML = `
+                <div class="iframe-error">
+                    ❌ Failed to load ${network} results
+                    <br>
+                    <a href="${iframe.src}" target="_blank" style="color: var(--color-primary); text-decoration: underline;">
+                        Open in new tab
+                    </a>
+                </div>
+            `;
+        });
 
         return resultDiv;
     }
@@ -360,38 +419,36 @@ class SearchManager {
         return icons[type] || '🔍';
     }
 
-    generateExplorerLinks(query, type, network) {
-        const links = [];
+    buildExplorerUrl(type, query, network) {
+        const selectedExplorer = this.getSelectedExplorer();
+        const explorer = this.explorers[selectedExplorer];
         
-        Object.entries(this.explorers).forEach(([key, explorer]) => {
-            const baseUrl = explorer.baseUrls[network];
-            if (baseUrl) {
-                const url = this.buildExplorerUrl(baseUrl, type, query);
-                links.push(`
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="explorer-link">
-                        <svg class="explorer-icon" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/>
-                            <path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/>
-                        </svg>
-                        View on ${explorer.name}
-                    </a>
-                `);
-            }
-        });
+        if (!explorer || !explorer.baseUrls[network]) {
+            return '#';
+        }
 
-        return links.join('');
-    }
-
-    buildExplorerUrl(baseUrl, type, query) {
-        // Build URLs for different explorers and types
-        const paths = {
-            transaction: '/tx/',
-            address: '/account/',
-            object: '/object/'
-        };
+        const baseUrl = explorer.baseUrls[network];
         
-        const path = paths[type] || '/search/';
-        return `${baseUrl}${path}${query}`;
+        // Build URLs based on explorer type and data type
+        if (selectedExplorer === 'suiscan') {
+            const paths = {
+                transaction: '/tx/',
+                address: '/account/',
+                object: '/object/'
+            };
+            const path = paths[type] || '/search/';
+            return `${baseUrl}${path}${encodeURIComponent(query)}`;
+        } else if (selectedExplorer === 'suivision') {
+            const paths = {
+                transaction: '/txblock/',
+                address: '/address/',
+                object: '/object/'
+            };
+            const path = paths[type] || '/search/';
+            return `${baseUrl}${path}${encodeURIComponent(query)}`;
+        }
+        
+        return `${baseUrl}/search/${encodeURIComponent(query)}`;
     }
 
     showLoading() {
