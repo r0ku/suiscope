@@ -150,32 +150,37 @@ class InputTypeDetector {
             return { type: 'unknown', confidence: 0 };
         }
 
-        // Base58 Transaction digest: ~44 chars, Base58 alphabet only (no 0, O, I, l, +, /, =)
+        // Transaction Digest: Base58 format, ~40-50 chars, no 0x prefix
+        // Base58 alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
         if (/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{40,50}$/.test(trimmed)) {
-            return { type: 'transaction', confidence: 0.95 };
+            // Additional validation: must not start with 0x and must be in typical range
+            if (!trimmed.startsWith('0x') && trimmed.length >= 40 && trimmed.length <= 50) {
+                return { type: 'transaction', confidence: 0.95 };
+            }
         }
 
-        // Base64 Transaction digest: 44 chars ending with =
-        if (/^[A-Za-z0-9+/]{43}=$/.test(trimmed)) {
-            return { type: 'transaction', confidence: 0.9 };
-        }
-
-        // Transaction digest: 0x + 64 hex characters (32 bytes)
+        // Address/Object ID: 0x + exactly 64 hex characters = 66 total chars
         if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
-            return { type: 'transaction', confidence: 0.85 };
+            if (trimmed.length === 66) {
+                // For addresses and objects, we'll treat them the same initially
+                // Could be refined later based on specific patterns if needed
+                return { type: 'address', confidence: 0.9 };
+            }
         }
 
-        // Address: 0x + up to 64 hex characters
-        if (/^0x[a-fA-F0-9]{1,64}$/.test(trimmed) && trimmed.length <= 66) {
-            return { type: 'address', confidence: 0.8 };
+        // Shorter hex strings with 0x prefix (less than 64 hex chars) - likely partial or invalid
+        if (/^0x[a-fA-F0-9]+$/.test(trimmed)) {
+            if (trimmed.length < 66) {
+                return { type: 'address', confidence: 0.6 };
+            }
         }
 
-        // Object ID: Similar to address but typically specific lengths
-        if (/^0x[a-fA-F0-9]{1,64}$/.test(trimmed)) {
-            return { type: 'object', confidence: 0.7 };
+        // Base64 Transaction digest: 44 chars ending with = (legacy format)
+        if (/^[A-Za-z0-9+/]{43}=$/.test(trimmed)) {
+            return { type: 'transaction', confidence: 0.8 };
         }
 
-        // If it starts with 0x but doesn't match patterns
+        // If it starts with 0x but doesn't match expected patterns
         if (trimmed.startsWith('0x')) {
             return { type: 'unknown', confidence: 0.3 };
         }
@@ -365,6 +370,8 @@ class SearchManager {
         const networkClass = network.toLowerCase();
         const typeClass = type.toLowerCase();
         
+        const explorerUrl = this.buildExplorerUrl(type, query, network);
+        
         resultDiv.innerHTML = `
             <div class="result-header">
                 <div class="result-type-badge ${typeClass}">
@@ -374,12 +381,17 @@ class SearchManager {
                 <div class="result-network">
                     <span class="network-badge ${networkClass}">${network.charAt(0).toUpperCase() + network.slice(1)}</span>
                 </div>
+                <div class="result-actions">
+                    <button class="open-new-tab-btn" onclick="window.open('${explorerUrl}', '_blank')" title="Open in new tab">
+                        🔗 Open in New Tab
+                    </button>
+                </div>
             </div>
             <div class="iframe-container">
                 <div class="iframe-loading">Loading ${network} results...</div>
                 <iframe 
                     class="result-iframe" 
-                    src="${this.buildExplorerUrl(type, query, network)}"
+                    src="${explorerUrl}"
                     sandbox="allow-scripts allow-same-origin allow-forms"
                     referrerpolicy="no-referrer"
                     loading="lazy"
