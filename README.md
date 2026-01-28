@@ -1,6 +1,6 @@
-# SuiScope - Modern Sui Network Search Tool
+# SuiScope - Simple Sui Network Wrapper
 
-A professionally designed, modern UI/UX for searching and exploring the Sui blockchain network with excellent accessibility, responsive design, and engaging visual elements.
+A simple, convenient wrapper that makes existing Sui blockchain explorers more accessible by enabling multi-network search across mainnet, testnet, and devnet simultaneously.
 
 ## 🎨 Design System
 
